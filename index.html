@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Calculator</title>
+<style>
+  /* Default theme = black. Users can change every colour from the menu > Colours. */
+  :root {
+    --bg: #000000;
+    --text: #ffffff;
+    --key-num: #1c1c1e;
+    --key-op: #3a3a3d;
+    --key-fn: #2a2a2d;
+    --key-ac: #d0d0d4;
+    --key-eq: #ffffff;
+    --num-ink: #ffffff;
+    --op-ink: #ffffff;
+    --fn-ink: #ffffff;
+    --ac-ink: #000000;
+    --eq-ink: #000000;
+    /* derived from bg + text */
+    --muted: color-mix(in srgb, var(--text) 55%, var(--bg));
+    --result-preview: color-mix(in srgb, var(--text) 72%, var(--bg));
+    --line: color-mix(in srgb, var(--text) 14%, var(--bg));
+    --menu-bg: color-mix(in srgb, var(--text) 10%, var(--bg));
+    --hover: color-mix(in srgb, var(--text) 9%, transparent);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: color-mix(in srgb, var(--bg) 55%, #000);
+    color: var(--text);
+    font-family: "Google Sans", "Product Sans", Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .calc {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    height: 100dvh;
+    max-height: 860px;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  @media (min-width: 460px) {
+    .calc { border-radius: 36px; height: 92dvh; box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0,0,0,.6); }
+  }
+
+  /* top bar */
+  .bar { display: flex; justify-content: space-between; padding: 14px 14px 0; }
+  .icon-btn {
+    width: 44px; height: 44px; border: 0; border-radius: 50%;
+    background: transparent; color: var(--muted); cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .icon-btn:hover { background: var(--hover); }
+  .icon-btn:focus-visible, .key:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+  .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+  .mode-tag { align-self: center; font-size: 12px; letter-spacing: .06em; color: var(--muted); }
+
+  /* display */
+  .display {
+    flex: 1;
+    min-height: 120px;
+    padding: 0 24px 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+    overflow: hidden;
+    text-align: right;
+  }
+  .expr, .result {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    line-height: 1.15;
+    transition: font-size .18s ease, color .18s ease;
+  }
+  .expr::-webkit-scrollbar, .result::-webkit-scrollbar { display: none; }
+  .expr { font-size: 56px; font-weight: 400; min-height: 64px; }
+  .result { font-size: 26px; color: var(--result-preview); min-height: 34px; margin-top: 6px; }
+  .display.done .expr { font-size: 26px; color: var(--muted); min-height: 34px; }
+  .display.done .result { font-size: 56px; color: var(--text); min-height: 64px; }
+  .display.error .result { color: #ff8a8a; font-size: 26px; }
+
+  /* expand handle */
+  .handle-row { display: flex; padding: 0 14px; height: 36px; }
+  .handle { width: 44px; height: 32px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 16px; }
+  .handle svg { width: 20px; height: 20px; fill: currentColor; transition: transform .25s ease; }
+  .calc.sci .handle svg { transform: rotate(180deg); }
+
+  /* keypad */
+  .pad { padding: 0 12px 16px; }
+  .sci-wrap {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows .28s ease;
+  }
+  .calc.sci .sci-wrap { grid-template-rows: 1fr; }
+  .sci-inner { overflow: hidden; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .sci-inner .grid { padding-bottom: 10px; }
+
+  .key {
+    border: 0; border-radius: 999px; cursor: pointer;
+    background: var(--key-num); color: var(--num-ink);
+    font: inherit; font-size: 28px;
+    height: 68px;
+    display: grid; place-items: center;
+    transition: transform .08s ease, filter .12s ease, border-radius .12s ease;
+    user-select: none;
+  }
+  .key:hover { filter: brightness(1.15); }
+  .key:active { transform: scale(.94); border-radius: 26px; }
+  .key.op { background: var(--key-op); color: var(--op-ink); font-size: 30px; }
+  .key.fn { background: var(--key-fn); color: var(--fn-ink); font-size: 22px; height: 52px; }
+  .key.fn.on { background: var(--key-ac); color: var(--ac-ink); }
+  .key.ac { background: var(--key-ac); color: var(--ac-ink); font-size: 26px; }
+  .key.eq { background: var(--key-eq); color: var(--eq-ink); font-size: 34px; }
+  .key svg { width: 28px; height: 28px; fill: currentColor; }
+  .key sup { font-size: .6em; position: relative; top: -.1em; }
+
+  @media (max-height: 700px) {
+    .key { height: 56px; font-size: 24px; }
+    .key.fn { height: 44px; font-size: 19px; }
+    .expr { font-size: 44px; min-height: 52px; }
+    .display.done .result { font-size: 44px; }
+  }
+
+  /* history panel */
+  .panel {
+    position: absolute; inset: 0; background: var(--bg);
+    transform: translateY(100%); transition: transform .28s ease;
+    display: flex; flex-direction: column; z-index: 5;
+    padding-top: env(safe-area-inset-top);
+  }
+  .panel.open { transform: translateY(0); }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 6px; }
+  .panel-head h2 { margin: 0; font-size: 20px; font-weight: 500; }
+  .panel-head button.text {
+    border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px;
+    padding: 10px 14px; border-radius: 20px; cursor: pointer;
+  }
+  .panel-head button.text:hover { background: var(--hover); }
+  .history { flex: 1; overflow-y: auto; padding: 8px 24px 24px; }
+  .history .empty { color: var(--muted); text-align: center; margin-top: 60px; }
+  .h-item { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: right; padding: 14px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .h-item .e { color: var(--muted); font-size: 18px; word-break: break-all; }
+  .h-item .r { font-size: 30px; margin-top: 2px; word-break: break-all; }
+
+  /* colour panel */
+  .theme-body { flex: 1; overflow-y: auto; padding: 8px 24px 24px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .chip { border: 2px solid var(--line); border-radius: 999px; padding: 8px 16px; font: inherit; font-size: 14px; cursor: pointer; }
+  .chip:focus-visible { outline: 3px solid var(--text); outline-offset: 2px; }
+  .c-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+  .c-row input[type=color] { width: 52px; height: 34px; border: 0; border-radius: 10px; background: transparent; padding: 0; cursor: pointer; }
+
+  /* menu */
+  .menu {
+    position: absolute; top: 60px; right: 14px; background: var(--menu-bg);
+    border-radius: 16px; padding: 6px; display: none; z-index: 6;
+    box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+  .menu.open { display: block; }
+  .menu button { display: block; width: 100%; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; text-align: left; padding: 12px 18px; border-radius: 12px; cursor: pointer; white-space: nowrap; }
+  .menu button:hover { background: var(--hover); }
+
+  .toast {
+    position: absolute; left: 50%; bottom: 24px; transform: translate(-50%, 20px);
+    background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 20px;
+    font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; z-index: 8;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<main class="calc" id="calc">
+  <div class="bar">
+    <button class="icon-btn" id="btnHistory" aria-label="History">
+      <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+    </button>
+    <span class="mode-tag" id="modeTag">RAD</span>
+    <button class="icon-btn" id="btnMenu" aria-label="More options">
+      <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+    </button>
+  </div>
+
+  <div class="menu" id="menu">
+    <button id="mColors">Colours</button>
+    <button id="mCopy">Copy result</button>
+    <button id="mClear">Clear history</button>
+  </div>
+
+  <section class="display" id="display" aria-live="polite">
+    <div class="expr" id="expr"></div>
+    <div class="result" id="result"></div>
+  </section>
+
+  <div class="handle-row">
+    <button class="handle" id="btnSci" aria-label="Show scientific functions" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+    </button>
+  </div>
+
+  <section class="pad">
+    <div class="sci-wrap">
+      <div class="sci-inner">
+        <div class="grid" id="sciGrid"></div>
+      </div>
+    </div>
+    <div class="grid" id="mainGrid"></div>
+  </section>
+
+  <aside class="panel" id="panel" aria-label="History">
+    <div class="panel-head">
+      <h2>History</h2>
+      <div>
+        <button class="text" id="pClear">Clear</button>
+        <button class="text" id="pClose">Close</button>
+      </div>
+    </div>
+    <div class="history" id="history"></div>
+  </aside>
+
+  <aside class="panel" id="panelColors" aria-label="Colours">
+    <div class="panel-head">
+      <h2>Colours</h2>
+      <div>
+        <button class="text" id="cReset">Reset to black</button>
+        <button class="text" id="cClose">Close</button>
+      </div>
+    </div>
+    <div class="theme-body">
+      <div class="presets" id="presets"></div>
+      <div id="colorRows"></div>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast"></div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- state ---------- */
+  const S = { expr: '', result: '', done: false, error: false, deg: false, inv: false, history: [] };
+
+  const $ = id => document.getElementById(id);
+  const calc = $('calc'), display = $('display'), exprEl = $('expr'), resultEl = $('result');
+
+  /* ---------- keypad definitions ---------- */
+  const SCI = [
+    { id: 'sqrt', label: '√',   inv: '<span>x<sup>2</sup></span>', ins: '√', insInv: '^2', cls: 'fn' },
+    { id: 'pi',   label: 'π',   ins: 'π', cls: 'fn' },
+    { id: 'pow',  label: '^',   ins: '^', cls: 'fn' },
+    { id: 'fact', label: '!',   ins: '!', cls: 'fn' },
+
+    { id: 'deg',  label: 'Deg', alt: 'Rad', cls: 'fn', action: 'toggleDeg' },
+    { id: 'sin',  label: 'sin', inv: 'sin<sup>−1</sup>', ins: 'sin(', insInv: 'asin(', cls: 'fn' },
+    { id: 'cos',  label: 'cos', inv: 'cos<sup>−1</sup>', ins: 'cos(', insInv: 'acos(', cls: 'fn' },
+    { id: 'tan',  label: 'tan', inv: 'tan<sup>−1</sup>', ins: 'tan(', insInv: 'atan(', cls: 'fn' },
+
+    { id: 'inv',  label: 'Inv', cls: 'fn', action: 'toggleInv' },
+    { id: 'e',    label: 'e',   ins: 'e', cls: 'fn' },
+    { id: 'ln',   label: 'ln',  inv: 'e<sup>x</sup>', ins: 'ln(', insInv: 'e^(', cls: 'fn' },
+    { id: 'log',  label: 'log', inv: '10<sup>x</sup>', ins: 'log(', insInv: '10^(', cls: 'fn' },
+  ];
+
+  const BACKSPACE = '<svg viewBox="0 0 24 24"><path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/></svg>';
+
+  const MAIN = [
+    { label: 'AC', cls: 'ac', action: 'clear' },
+    { label: '( )', cls: 'op', action: 'paren' },
+    { label: '%', cls: 'op', ins: '%' },
+    { label: '÷', cls: 'op', ins: '÷' },
+
+    { label: '7', ins: '7' }, { label: '8', ins: '8' }, { label: '9', ins: '9' },
+    { label: '×', cls: 'op', ins: '×' },
+
+    { label: '4', ins: '4' }, { label: '5', ins: '5' }, { label: '6', ins: '6' },
+    { label: '−', cls: 'op', ins: '−' },
+
+    { label: '1', ins: '1' }, { label: '2', ins: '2' }, { label: '3', ins: '3' },
+    { label: '+', cls: 'op', ins: '+' },
+
+    { label: '0', ins: '0' }, { label: '.', ins: '.' },
+    { label: BACKSPACE, action: 'back', aria: 'Backspace' },
+    { label: '=', cls: 'eq', action: 'equals' },
+  ];
+
+  function buildKeys(list, root) {
+    list.forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'key ' + (k.cls || '');
+      b.innerHTML = k.label;
+      if (k.aria) b.setAttribute('aria-label', k.aria);
+      b.addEventListener('click', () => press(k));
+      k.el = b;
+      root.appendChild(b);
+    });
+  }
+  buildKeys(SCI, $('sciGrid'));
+  buildKeys(MAIN, $('mainGrid'));
+
+  /* ---------- helpers ---------- */
+  const OPS = '+−×÷^';
+  const last = () => S.expr.slice(-1);
+  const isDigit = c => /[0-9]/.test(c);
+  const endsValue = () => /[0-9.)πe!%]$/.test(S.expr);
+  const countOf = ch => S.expr.split(ch).length - 1;
+  const openParens = () => countOf('(') - countOf(')');
+
+  function press(k) {
+    if (k.action) return actions[k.action]();
+    const ins = (S.inv && k.insInv) ? k.insInv : k.ins;
+    insert(ins);
+  }
+
+  function insert(t) {
+    if (S.error) { S.expr = ''; }
+    // start fresh after a result unless continuing with an operator
+    if (S.done) {
+      const continuing = OPS.includes(t) || t === '!' || t === '%';
+      S.expr = continuing ? S.result : '';
+      S.done = false;
+      if (continuing && (S.result === '' || /[^0-9.,\-−E]/.test(S.result))) S.expr = '';
+      S.expr = S.expr.replace(/,/g, '').replace(/-/g, '−');
+    }
+    S.error = false;
+
+    if (isDigit(t)) {
+      if (/[πe!%)]$/.test(S.expr)) S.expr += '×';
+      S.expr += t;
+    } else if (t === '.') {
+      const m = S.expr.match(/[0-9.]*$/)[0];
+      if (m.includes('.')) return refresh();
+      if (!isDigit(last())) S.expr += (/[πe!%)]$/.test(S.expr) ? '×' : '') + '0';
+      S.expr += '.';
+    } else if (OPS.includes(t)) {
+      if (S.expr === '') {
+        if (t !== '−') return refresh();
+        S.expr = '−';
+      } else {
+        const l = last();
+        if (OPS.includes(l)) {
+          if (t === '−' && '×÷^'.includes(l)) S.expr += t;   // allow negatives: 2×−3
+          else S.expr = S.expr.replace(/[+−×÷^]+$/, '') + t;
+        } else if (l === '(') {
+          if (t === '−') S.expr += t;
+        } else S.expr += t;
+      }
+    } else if (t === '!' || t === '%') {
+      if (!/[0-9)πe!%]$/.test(S.expr)) return refresh();
+      S.expr += t;
+    } else if (t === 'π' || t === 'e' || t === '√' || /\($/.test(t) || t === 'e^(' || t === '10^(') {
+      if (endsValue()) S.expr += '×';
+      S.expr += t;
+    } else if (t === '^2') {
+      if (!endsValue()) return refresh();
+      S.expr += t;
+    } else {
+      S.expr += t;
+    }
+    refresh();
+  }
+
+  const actions = {
+    clear() { S.expr = ''; S.result = ''; S.done = false; S.error = false; refresh(); },
+    back() {
+      if (S.done) { S.done = false; S.result = ''; refresh(); return; }
+      if (S.error) return actions.clear();
+      // remove whole function token like "sin(" at once
+      const m = S.expr.match(/(asin\(|acos\(|atan\(|sin\(|cos\(|tan\(|log\(|ln\(|e\^\(|10\^\()$/);
+      S.expr = m ? S.expr.slice(0, -m[0].length) : S.expr.slice(0, -1);
+      refresh();
+    },
+    paren() {
+      if (S.done) { S.expr = ''; S.done = false; }
+      if (S.error) S.expr = '';
+      S.error = false;
+      if (openParens() > 0 && /[0-9.)πe!%]$/.test(S.expr)) S.expr += ')';
+      else {
+        if (endsValue()) S.expr += '×';
+        S.expr += '(';
+      }
+      refresh();
+    },
+    equals() {
+      if (S.expr === '' || S.done) return;
+      try {
+        const v = evaluate(S.expr);
+        const out = fmt(v);
+        S.history.unshift({ e: S.expr, r: out });
+        if (S.history.length > 100) S.history.pop();
+        S.result = out;
+        S.done = true;
+        S.error = false;
+      } catch (err) {
+        S.error = true;
+        S.done = false;
+        S.result = err.message === 'div0' ? "Can't divide by 0" : 'Format error';
+      }
+      refresh();
+    },
+    toggleDeg() { S.deg = !S.deg; refresh(); },
+    toggleInv() { S.inv = !S.inv; refresh(); },
+  };
+
+  /* ---------- evaluator (no eval) ---------- */
+  function tokenize(src) {
+    const re = /\s*(asin\(|acos\(|atan\(|sin\(|cos\(|tan\(|log\(|ln\(|\d+\.?\d*|\.\d+|[π]|e|[+−×÷^()!%√])/y;
+    const out = [];
+    let m;
+    re.lastIndex = 0;
+    while (re.lastIndex < src.length) {
+      m = re.exec(src);
+      if (!m) throw new Error('syntax');
+      out.push(m[1]);
+    }
+    return out;
+  }
+
+  function evaluate(src) {
+    const t = tokenize(src);
+    let i = 0;
+    const peek = () => t[i];
+    const next = () => t[i++];
+
+    const toRad = x => S.deg ? x * Math.PI / 180 : x;
+    const fromRad = x => S.deg ? x * 180 / Math.PI : x;
+
+    const fns = {
+      'sin(': x => {
+        if (S.deg && Math.abs(x % 180) < 1e-12) return 0;
+        return Math.sin(toRad(x));
+      },
+      'cos(': x => {
+        if (S.deg && Math.abs((x - 90) % 180) < 1e-12) return 0;
+        return Math.cos(toRad(x));
+      },
+      'tan(': x => {
+        if (S.deg && Math.abs((x - 90) % 180) < 1e-12) throw new Error('syntax');
+        if (S.deg && Math.abs(x % 180) < 1e-12) return 0;
+        return Math.tan(toRad(x));
+      },
+      'asin(': x => { if (Math.abs(x) > 1) throw new Error('syntax'); return fromRad(Math.asin(x)); },
+      'acos(': x => { if (Math.abs(x) > 1) throw new Error('syntax'); return fromRad(Math.acos(x)); },
+      'atan(': x => fromRad(Math.atan(x)),
+      'ln(':   x => { if (x <= 0) throw new Error('syntax'); return Math.log(x); },
+      'log(':  x => { if (x <= 0) throw new Error('syntax'); return Math.log10(x); },
+    };
+
+    function expr() {
+      let l = term();
+      while (peek() === '+' || peek() === '−') {
+        const op = next();
+        const r = term();
+        if (r.pct) {                       // 50 + 10%  ->  50 + 5
+          l = { v: op === '+' ? l.v + l.v * r.v : l.v - l.v * r.v };
+        } else {
+          l = { v: op === '+' ? l.v + r.v : l.v - r.v };
+        }
+      }
+      return l;
+    }
+
+    function startsFactor(tok) {
+      return tok !== undefined && (/^[0-9.]/.test(tok) || tok === 'π' || tok === 'e' || tok === '(' || tok === '√' || /\($/.test(tok));
+    }
+
+    function term() {
+      let l = unary();
+      for (;;) {
+        const p = peek();
+        if (p === '×' || p === '÷') {
+          next();
+          const r = unary();
+          if (p === '÷') {
+            if (r.v === 0) throw new Error('div0');
+            l = { v: l.v / r.v };
+          } else l = { v: l.v * r.v };
+        } else if (startsFactor(p)) {       // implicit multiplication: 2π, 3(4)
+          const r = unary();
+          l = { v: l.v * r.v };
+        } else break;
+      }
+      return l;
+    }
+
+    function unary() {
+      if (peek() === '−') { next(); const u = unary(); return { v: -u.v, pct: u.pct }; }
+      if (peek() === '+') { next(); return unary(); }
+      return power();
+    }
+
+    function power() {
+      const base = postfix();
+      if (peek() === '^') {
+        next();
+        const ex = unary();                 // right-associative
+        return { v: Math.pow(base.v, ex.v) };
+      }
+      return base;
+    }
+
+    function postfix() {
+      let p = primary();
+      for (;;) {
+        if (peek() === '!') {
+          next();
+          p = { v: factorial(p.v) };
+        } else if (peek() === '%') {
+          next();
+          p = { v: p.v / 100, pct: true };
+        } else break;
+      }
+      return p;
+    }
+
+    function primary() {
+      const tok = next();
+      if (tok === undefined) throw new Error('syntax');
+      if (/^[0-9.]/.test(tok)) return { v: parseFloat(tok) };
+      if (tok === 'π') return { v: Math.PI };
+      if (tok === 'e') return { v: Math.E };
+      if (tok === '(') {
+        const v = expr();
+        if (peek() === ')') next();         // tolerate missing ")"
+        return { v: v.v };
+      }
+      if (tok === '√') {
+        const arg = peek() === '(' ? primary() : postfixNoFn();
+        if (arg.v < 0) throw new Error('syntax');
+        return { v: Math.sqrt(arg.v) };
+      }
+      if (fns[tok]) {
+        const v = expr();
+        if (peek() === ')') next();
+        return { v: fns[tok](v.v) };
+      }
+      throw new Error('syntax');
+    }
+
+    function postfixNoFn() { return primary(); }
+
+    function factorial(x) {
+      if (x < 0 || !Number.isInteger(x) || x > 170) throw new Error('syntax');
+      let r = 1;
+      for (let n = 2; n <= x; n++) r *= n;
+      return r;
+    }
+
+    const res = expr();
+    if (i < t.length) throw new Error('syntax');
+    if (!Number.isFinite(res.v)) throw new Error('syntax');
+    return res.v;
+  }
+
+  /* ---------- formatting ---------- */
+  function group(intPart) { return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+  function fmt(n) {
+    if (Math.abs(n) < 1e-13) n = 0;
+    let s = String(parseFloat(n.toPrecision(12)));
+    if (s.includes('e')) {
+      const [m, ex] = s.split('e');
+      return m.replace('-', '−') + 'E' + ex.replace('+', '');
+    }
+    const neg = s.startsWith('-');
+    if (neg) s = s.slice(1);
+    const [i, f] = s.split('.');
+    return (neg ? '−' : '') + group(i) + (f ? '.' + f : '');
+  }
+
+  function prettyExpr(s) {
+    return s.replace(/\d+\.?\d*|\.\d+/g, m => {
+      const [i, f] = m.split('.');
+      return group(i) + (m.includes('.') ? '.' + (f || '') : '');
+    });
+  }
+
+  function fitText(el, base, min) {
+    el.style.fontSize = '';
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    const max = el.clientWidth;
+    while (el.scrollWidth > max && size > min) {
+      size -= 2;
+      el.style.fontSize = size + 'px';
+    }
+    el.scrollLeft = el.scrollWidth;
+  }
+
+  /* ---------- render ---------- */
+  function refresh() {
+    // live preview
+    let preview = '';
+    if (!S.done && !S.error && S.expr) {
+      try {
+        const hasOp = /[+−×÷^!%√()]|[a-z]/.test(S.expr.replace(/^−/, ''));
+        if (hasOp) preview = fmt(evaluate(S.expr));
+      } catch (e) { preview = ''; }
+    }
+
+    exprEl.textContent = prettyExpr(S.expr);
+    resultEl.textContent = S.done ? S.result : (S.error ? S.result : preview);
+
+    display.classList.toggle('done', S.done);
+    display.classList.toggle('error', S.error);
+
+    // labels that depend on mode
+    $('modeTag').textContent = S.deg ? 'DEG' : 'RAD';
+    SCI.forEach(k => {
+      if (k.id === 'deg') k.el.textContent = S.deg ? k.alt : k.label;
+      if (k.id === 'inv') k.el.classList.toggle('on', S.inv);
+      if (k.inv) k.el.innerHTML = S.inv ? k.inv : k.label;
+    });
+
+    // clear key label
+    MAIN[0].el.textContent = (S.expr || S.done) ? 'AC' : 'AC';
+
+    fitText(exprEl, 56, 26);
+    fitText(resultEl, 56, 26);
+  }
+
+  /* ---------- history / menu / sci toggle ---------- */
+  const panel = $('panel'), histEl = $('history'), menu = $('menu');
+
+  function renderHistory() {
+    histEl.innerHTML = '';
+    if (!S.history.length) {
+      histEl.innerHTML = '<div class="empty">No history yet</div>';
+      return;
+    }
+    S.history.forEach(h => {
+      const b = document.createElement('button');
+      b.className = 'h-item';
+      b.innerHTML = '<div class="e"></div><div class="r"></div>';
+      b.firstChild.textContent = prettyExpr(h.e);
+      b.lastChild.textContent = h.r;
+      b.addEventListener('click', () => {
+        S.expr = h.r.replace(/,/g, '');
+        S.done = false; S.error = false; S.result = '';
+        panel.classList.remove('open');
+        refresh();
+      });
+      histEl.appendChild(b);
+    });
+  }
+
+  $('btnHistory').addEventListener('click', () => { renderHistory(); panel.classList.add('open'); menu.classList.remove('open'); });
+  $('pClose').addEventListener('click', () => panel.classList.remove('open'));
+  $('pClear').addEventListener('click', () => { S.history = []; renderHistory(); });
+
+  $('btnMenu').addEventListener('click', e => { e.stopPropagation(); menu.classList.toggle('open'); });
+  document.addEventListener('click', () => menu.classList.remove('open'));
+  $('mClear').addEventListener('click', () => { S.history = []; toast('History cleared'); });
+  $('mCopy').addEventListener('click', async () => {
+    const v = S.done ? S.result : (resultEl.textContent || S.expr);
+    if (!v) return toast('Nothing to copy');
+    try { await navigator.clipboard.writeText(v.replace(/,/g, '').replace(/−/g, '-')); toast('Copied'); }
+    catch { toast('Copy not available'); }
+  });
+
+  $('btnSci').addEventListener('click', () => {
+    const on = calc.classList.toggle('sci');
+    $('btnSci').setAttribute('aria-expanded', on);
+    $('btnSci').setAttribute('aria-label', on ? 'Hide scientific functions' : 'Show scientific functions');
+  });
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1400);
+  }
+
+  /* ---------- colour themes ---------- */
+  // Default is black. Anyone can change colours from the menu; the choice is saved only in their own browser.
+  const DEFAULT_THEME = { bg:'#000000', text:'#ffffff', num:'#1c1c1e', op:'#3a3a3d', fn:'#2a2a2d', ac:'#d0d0d4', eq:'#ffffff' };
+  const PRESETS = {
+    'Black':  DEFAULT_THEME,
+    'Purple': { bg:'#0d0b2e', text:'#ffffff', num:'#2b2575', op:'#4a3fc9', fn:'#3a31a0', ac:'#8f8cf8', eq:'#ffa0e2' },
+    'Ocean':  { bg:'#06121f', text:'#ffffff', num:'#10304d', op:'#1e6fb8', fn:'#164066', ac:'#7cc4ff', eq:'#ffd166' },
+    'Forest': { bg:'#08140d', text:'#ffffff', num:'#16301f', op:'#2f7a47', fn:'#1f4a2d', ac:'#9be7b0', eq:'#f5e663' },
+    'Light':  { bg:'#f5f5f7', text:'#1c1c1e', num:'#ffffff', op:'#dcdce3', fn:'#e9e9ee', ac:'#3a3a3d', eq:'#1c1c1e' },
+  };
+  const COLOR_FIELDS = [
+    ['bg','Background'], ['text','Display text'], ['num','Number keys'],
+    ['op','Operator keys'], ['fn','Function keys'], ['ac','AC key'], ['eq','Equals key'],
+  ];
+  const STORE_KEY = 'calc-theme';
+  let theme = { ...DEFAULT_THEME };
+
+  const inkFor = hex => {
+    const n = parseInt(hex.slice(1), 16);
+    const lum = (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+    return lum > 0.58 ? '#111111' : '#ffffff';
+  };
+
+  function applyTheme(t, save = true) {
+    theme = { ...t };
+    const r = document.documentElement.style;
+    r.setProperty('--bg', t.bg);
+    r.setProperty('--text', t.text);
+    r.setProperty('--key-num', t.num);  r.setProperty('--num-ink', inkFor(t.num));
+    r.setProperty('--key-op',  t.op);   r.setProperty('--op-ink',  inkFor(t.op));
+    r.setProperty('--key-fn',  t.fn);   r.setProperty('--fn-ink',  inkFor(t.fn));
+    r.setProperty('--key-ac',  t.ac);   r.setProperty('--ac-ink',  inkFor(t.ac));
+    r.setProperty('--key-eq',  t.eq);   r.setProperty('--eq-ink',  inkFor(t.eq));
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', t.bg);
+    COLOR_FIELDS.forEach(([k]) => { const el = $('c_' + k); if (el) el.value = t[k]; });
+    if (save) { try { localStorage.setItem(STORE_KEY, JSON.stringify(t)); } catch (e) {} }
+  }
+
+  // build colour panel
+  COLOR_FIELDS.forEach(([k, label]) => {
+    const row = document.createElement('label');
+    row.className = 'c-row';
+    row.innerHTML = '<span></span><input type="color" id="c_' + k + '">';
+    row.firstChild.textContent = label;
+    row.lastChild.addEventListener('input', e => applyTheme({ ...theme, [k]: e.target.value }));
+    $('colorRows').appendChild(row);
+  });
+  Object.entries(PRESETS).forEach(([name, t]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.textContent = name;
+    b.style.background = t.bg; b.style.color = t.text; b.style.borderColor = t.eq;
+    b.addEventListener('click', () => applyTheme({ ...t }));
+    $('presets').appendChild(b);
+  });
+
+  const panelColors = $('panelColors');
+  $('mColors').addEventListener('click', () => { panelColors.classList.add('open'); menu.classList.remove('open'); });
+  $('cClose').addEventListener('click', () => panelColors.classList.remove('open'));
+  $('cReset').addEventListener('click', () => {
+    applyTheme({ ...DEFAULT_THEME });
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+    toast('Back to black');
+  });
+
+  // load saved theme (this browser only); otherwise black
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY));
+    const ok = saved && COLOR_FIELDS.every(([k]) => /^#[0-9a-f]{6}$/i.test(saved[k]));
+    applyTheme(ok ? saved : { ...DEFAULT_THEME }, false);
+  } catch (e) { applyTheme({ ...DEFAULT_THEME }, false); }
+
+  /* ---------- keyboard ---------- */
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (/^[0-9]$/.test(k)) insert(k);
+    else if (k === '.' || k === ',') insert('.');
+    else if (k === '+') insert('+');
+    else if (k === '-') insert('−');
+    else if (k === '*' || k === 'x' || k === 'X') insert('×');
+    else if (k === '/') { e.preventDefault(); insert('÷'); }
+    else if (k === '^') insert('^');
+    else if (k === '!') insert('!');
+    else if (k === '%') insert('%');
+    else if (k === '(' || k === ')') actions.paren();
+    else if (k === 'Enter' || k === '=') { e.preventDefault(); actions.equals(); }
+    else if (k === 'Backspace') actions.back();
+    else if (k === 'Escape' || k === 'Delete') actions.clear();
+    else return;
+  });
+
+  window.addEventListener('resize', refresh);
+  refresh();
+})();
+</script>
+</body>
+</html>
